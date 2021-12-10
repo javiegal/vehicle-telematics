@@ -5,6 +5,7 @@ import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.api.java.tuple.Tuple5;
+import org.apache.flink.api.java.tuple.Tuple6;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
@@ -25,15 +26,16 @@ public class VehicleTelematics {
      *             output folder.
      */
     public static void main(String[] args) {
-        // set up the streaming execution environment
-        String input = args[0];
-        String output = args[1];
+        String inputFile = args[0];
+        String outputFolder = args[1];
 
+        // Set up the streaming execution environment
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment().setParallelism(3);
         // env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
-        // Above method is deprecated after Flink 1.12.0: time characteristic set to EventTime by default
+        // The above commented method is deprecated. After Flink 1.12.0, time characteristic is set to EventTime by default
 
-        DataStreamSource<String> source = env.readTextFile(input);
+        // Read and parse input file
+        DataStreamSource<String> source = env.readTextFile(inputFile);
         SingleOutputStreamOperator<PositionEvent> position = source.map(
                 (MapFunction<String, PositionEvent>) s -> {
                     String[] fieldArray = s.split(",");
@@ -46,9 +48,9 @@ public class VehicleTelematics {
         );
 
         // Average Speed Fines
-        int windowGap = 1000;
+        int windowGap = 10000; // Gap time for the window
         position
-                .filter(pe -> pe.getSeg() >= 52 && pe.getSeg() <= 56)
+                .filter(pe -> pe.getSeg() >= VTConstants.INI_SEG && pe.getSeg() <= VTConstants.END_SEG)
                 .assignTimestampsAndWatermarks(WatermarkStrategy.<PositionEvent>forMonotonousTimestamps()
                         .withTimestampAssigner((pe, timeStamp) -> pe.getTime() * 1000))
                 .keyBy(new KeySelector<PositionEvent, Tuple3<Integer, Integer, Integer>>() {
@@ -57,15 +59,17 @@ public class VehicleTelematics {
                         return new Tuple3<Integer, Integer, Integer>(pe.getVid(), pe.getXway(), pe.getDir());
                     }
                 })
-                .window(EventTimeSessionWindows.withGap(Time.seconds(windowGap))) // Appropriate value for the gap? With 30 or less it does not return the same output
+                .window(EventTimeSessionWindows.withGap(Time.seconds(windowGap)))
                 .apply(new AvgSpeedControl(windowGap))
-                .writeAsCsv(output + "/avgspeedfines.csv", FileSystem.WriteMode.OVERWRITE).setParallelism(1);
+                .writeAsCsv(outputFolder + "/avgspeedfines.csv", FileSystem.WriteMode.OVERWRITE).setParallelism(1);
+
         // Speed Fines
         position
-                .filter(pe -> pe.getSpd() > 90)
-                .map((MapFunction<PositionEvent, SpeedFine>) pe -> new SpeedFine(pe.getTime(), pe.getVid(),
-                        pe.getXway(), pe.getSeg(), pe.getDir(), pe.getSpd()))
-                .writeAsCsv(output + "/speedfines.csv", FileSystem.WriteMode.OVERWRITE).setParallelism(1);
+                .filter(pe -> pe.getSpd() > VTConstants.MAX_SPEED)
+                .map((MapFunction<PositionEvent, Tuple6<Integer, Integer, Integer, Integer, Integer, Integer>>) pe ->
+                        new Tuple6<Integer, Integer, Integer, Integer, Integer, Integer>(pe.getTime(), pe.getVid(),
+                                pe.getXway(), pe.getSeg(), pe.getDir(), pe.getSpd()))
+                .writeAsCsv(outputFolder + "/speedfines.csv", FileSystem.WriteMode.OVERWRITE).setParallelism(1);
 
         // Accident Report
         position
@@ -77,10 +81,9 @@ public class VehicleTelematics {
                                 pe.getSeg(), pe.getDir(), pe.getPos());
                     }
                 })
-                .countWindow(4, 1)
+                .countWindow(VTConstants.REPORTS_ACCIDENT, 1)
                 .apply(new AccidentReporter())
-                .writeAsCsv(output + "/accidents.csv", FileSystem.WriteMode.OVERWRITE).setParallelism(1);
-
+                .writeAsCsv(outputFolder + "/accidents.csv", FileSystem.WriteMode.OVERWRITE).setParallelism(1);
 
         // Execute program
         try {
@@ -89,6 +92,4 @@ public class VehicleTelematics {
             e.printStackTrace();
         }
     }
-
-
 }
