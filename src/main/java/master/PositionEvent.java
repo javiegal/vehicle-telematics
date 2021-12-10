@@ -3,50 +3,43 @@ package master;
 import org.apache.flink.api.java.tuple.Tuple8;
 
 public class PositionEvent extends Tuple8<Integer, Integer, Integer, Integer, Integer, Integer, Integer, Integer> {
-    public PositionEvent(){
-
+    public PositionEvent() {
+        super();
     }
 
     public PositionEvent(int time, int vid, int spd, int xway, int lane, int dir, int seg, int pos) {
-        this.f0 = time;
-        this.f1 = vid;
-        this.f2 = spd;
-        this.f3 = xway;
-        this.f4 = lane;
-        this.f5 = dir;
-        this.f6 = seg;
-        this.f7 = pos;
+        super(time, vid, spd, xway, lane, dir, seg, pos);
     }
 
     public Integer getTime() {
-        return this.f0;
+        return super.getField(0);
     }
 
     public Integer getVid() {
-        return this.f1;
+        return super.getField(1);
     }
 
     public Integer getSpd() {
-        return this.f2;
+        return super.getField(2);
     }
 
     public Integer getXway() {
-        return this.f3;
+        return super.getField(3);
     }
 
     public Integer getLane() {
-        return this.f4;
+        return super.getField(4);
     }
 
     public Integer getDir() {
-        return this.f5;
+        return super.getField(5);
     }
 
     public Integer getSeg() {
-        return this.f6;
+        return super.getField(6);
     }
 
     public Integer getPos() {
-        return this.f7;
+        return super.getField(7);
     }
 }

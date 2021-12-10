@@ -13,16 +13,23 @@ import org.apache.flink.streaming.api.windowing.assigners.EventTimeSessionWindow
 import org.apache.flink.streaming.api.windowing.time.Time;
 
 
-
+/**
+ * @author Ricardo María Longares Díez and Javier Gallego Gutiérrez
+ */
 public class VehicleTelematics {
 
-    public static void main(String[] args) throws Exception {
+    /**
+     * Main method of the program
+     *
+     * @param args arguments provided to the program. The first one should be the input file and the second one the
+     *             output folder.
+     */
+    public static void main(String[] args) {
         // set up the streaming execution environment
         String input = args[0];
         String output = args[1];
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment().setParallelism(3);
-
         // env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
         // Above method is deprecated after Flink 1.12.0: time characteristic set to EventTime by default
 
@@ -38,19 +45,20 @@ public class VehicleTelematics {
                 }
         );
 
-         // Average Speed Fines
+        // Average Speed Fines
+        int windowGap = 1000;
         position
                 .filter(pe -> pe.getSeg() >= 52 && pe.getSeg() <= 56)
                 .assignTimestampsAndWatermarks(WatermarkStrategy.<PositionEvent>forMonotonousTimestamps()
                         .withTimestampAssigner((pe, timeStamp) -> pe.getTime() * 1000))
                 .keyBy(new KeySelector<PositionEvent, Tuple3<Integer, Integer, Integer>>() {
                     @Override
-                    public Tuple3<Integer, Integer, Integer> getKey(PositionEvent pe) throws Exception {
+                    public Tuple3<Integer, Integer, Integer> getKey(PositionEvent pe) {
                         return new Tuple3<Integer, Integer, Integer>(pe.getVid(), pe.getXway(), pe.getDir());
                     }
                 })
-                .window(EventTimeSessionWindows.withGap(Time.seconds(100))) // Appropriate value for the gap? With 30 or lesss it does not return the same output
-                .apply(new AvgSpeedControl())
+                .window(EventTimeSessionWindows.withGap(Time.seconds(windowGap))) // Appropriate value for the gap? With 30 or less it does not return the same output
+                .apply(new AvgSpeedControl(windowGap))
                 .writeAsCsv(output + "/avgspeedfines.csv", FileSystem.WriteMode.OVERWRITE).setParallelism(1);
         // Speed Fines
         position
@@ -62,10 +70,10 @@ public class VehicleTelematics {
         // Accident Report
         position
                 .filter(pe -> pe.getSpd() == 0)
-                .keyBy(new KeySelector<PositionEvent, Tuple5<Integer, Integer, Integer,Integer,Integer>>() {
+                .keyBy(new KeySelector<PositionEvent, Tuple5<Integer, Integer, Integer, Integer, Integer>>() {
                     @Override
-                    public Tuple5<Integer, Integer, Integer,Integer,Integer> getKey(PositionEvent pe) throws Exception {
-                        return new Tuple5<Integer, Integer, Integer,Integer,Integer>(pe.getVid(), pe.getXway(),
+                    public Tuple5<Integer, Integer, Integer, Integer, Integer> getKey(PositionEvent pe) {
+                        return new Tuple5<Integer, Integer, Integer, Integer, Integer>(pe.getVid(), pe.getXway(),
                                 pe.getSeg(), pe.getDir(), pe.getPos());
                     }
                 })
