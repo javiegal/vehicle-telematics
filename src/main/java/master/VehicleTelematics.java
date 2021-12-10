@@ -1,15 +1,20 @@
 package master;
-
+import master.Accident;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.tuple.Tuple3;
+import org.apache.flink.api.java.tuple.Tuple5;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.windowing.assigners.EventTimeSessionWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.streaming.api.windowing.windows.GlobalWindow;
+import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
+import org.apache.flink.util.Collector;
+import java.util.Iterator;
 /*
 import org.apache.flink.streaming.api.functions.sink.filesystem.StreamingFileSink;
 import org.apache.flink.api.common.serialization.SimpleStringEncoder;
@@ -55,7 +60,7 @@ public class VehicleTelematics {
             .withOutputFileConfig(config)
             .build();
          */
-
+         //Average Speed Fines
         position
                 .filter(pe -> pe.getSeg() >= 52 && pe.getSeg() <= 56)
                 .assignTimestampsAndWatermarks(WatermarkStrategy.<PositionEvent>forMonotonousTimestamps()
@@ -69,9 +74,38 @@ public class VehicleTelematics {
                 })
                 .window(EventTimeSessionWindows.withGap(Time.seconds(100))) // Appropriate value for the gap? With 30 or lesss it does not return the same output
                 .apply(new AvgSpeedWindow())
-                .writeAsCsv(output + "avgspeedfines.csv", FileSystem.WriteMode.OVERWRITE).setParallelism(1);
+                .writeAsCsv(output + "/avgspeedfines.csv", FileSystem.WriteMode.OVERWRITE).setParallelism(1);
                 // .map(AvgSpeedFine::toString).addSink(sinkAvg); No deprecated way to do it (problems with checkpointing)
+        //Speed Fines
+        position
+                .filter(pe -> pe.getSpd() > 90)
+                .map(new MapFunction<PositionEvent,SpeedFine>() {
+                  SpeedFine speedFine = new SpeedFine();
+                    @Override
+                    public SpeedFine map(PositionEvent pe) throws Exception {
+                        speedFine.setTime(pe.getTime());
+                        speedFine.setVid(pe.getVid());
+                        speedFine.setXway(pe.getXway());
+                        speedFine.setSeg(pe.getSeg());
+                        speedFine.setDir(pe.getDir());
+                        speedFine.setSpd(pe.getSpd());
+                        return speedFine;
+                    }
+                })
+                .writeAsCsv(output + "/speedfines.csv", FileSystem.WriteMode.OVERWRITE).setParallelism(1);
+        //Accident Report
 
+        position
+                .filter(pe -> pe.getSpd() == 0).setParallelism(1)
+                .keyBy(new KeySelector<PositionEvent, Tuple5<Integer, Integer, Integer,Integer,Integer>>() {
+                    @Override
+                    public Tuple5<Integer, Integer, Integer,Integer,Integer> getKey(PositionEvent pe) throws Exception {
+                        return new Tuple5<Integer, Integer, Integer,Integer,Integer>(pe.getVid(),pe.getXway(),pe.getSeg(), pe.getDir(), pe.getPos());
+                    }
+                })
+                .countWindow(4, 1)
+                .apply(new RepOfAccident())
+                .writeAsCsv(output + "/accidents.csv", FileSystem.WriteMode.OVERWRITE).setParallelism(1);
 
         // execute program
         try {
@@ -80,4 +114,6 @@ public class VehicleTelematics {
             e.printStackTrace();
         }
     }
+
+
 }
