@@ -8,7 +8,7 @@ import org.apache.flink.util.Collector;
 import java.util.Arrays;
 import java.util.Iterator;
 
-public class AvgSpeedWindow implements WindowFunction<PositionEvent, AvgSpeedFine, Tuple3<Integer, Integer,
+public class AvgSpeedControl implements WindowFunction<PositionEvent, AvgSpeedFine, Tuple3<Integer, Integer,
         Integer>, TimeWindow> {
 
     @Override

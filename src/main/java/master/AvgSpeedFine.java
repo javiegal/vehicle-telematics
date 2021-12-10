@@ -1,7 +1,6 @@
 package master;
 
 import org.apache.flink.api.java.tuple.Tuple6;
-import org.apache.flink.util.StringUtils;
 
 public class AvgSpeedFine extends Tuple6<Integer, Integer, Integer, Integer, Integer, Double> {
     public AvgSpeedFine(){
@@ -15,11 +14,5 @@ public class AvgSpeedFine extends Tuple6<Integer, Integer, Integer, Integer, Int
         this.f3 = xway;
         this.f4 = dir;
         this.f5 = avg;
-    }
-
-    public String toString() {
-        return StringUtils.arrayAwareToString(this.f0) + "," + StringUtils.arrayAwareToString(this.f1) +
-                "," + StringUtils.arrayAwareToString(this.f2) + "," + StringUtils.arrayAwareToString(this.f3) +
-                "," + StringUtils.arrayAwareToString(this.f4) + "," + StringUtils.arrayAwareToString(this.f5);
     }
 }

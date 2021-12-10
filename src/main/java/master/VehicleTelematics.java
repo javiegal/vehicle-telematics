@@ -1,5 +1,5 @@
 package master;
-import master.Accident;
+
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.functions.KeySelector;
@@ -11,16 +11,6 @@ import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.windowing.assigners.EventTimeSessionWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
-import org.apache.flink.streaming.api.windowing.windows.GlobalWindow;
-import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
-import org.apache.flink.util.Collector;
-import java.util.Iterator;
-/*
-import org.apache.flink.streaming.api.functions.sink.filesystem.StreamingFileSink;
-import org.apache.flink.api.common.serialization.SimpleStringEncoder;
-import org.apache.flink.core.fs.Path;
-import org.apache.flink.streaming.api.functions.sink.filesystem.OutputFileConfig;
- */
 
 
 
@@ -31,7 +21,8 @@ public class VehicleTelematics {
         String input = args[0];
         String output = args[1];
 
-        final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment().setParallelism(3);
+
         // env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
         // Above method is deprecated after Flink 1.12.0: time characteristic set to EventTime by default
 
@@ -47,25 +38,11 @@ public class VehicleTelematics {
                 }
         );
 
-        /* Needed to write a CSV file not using deprecated methods
-        OutputFileConfig config = OutputFileConfig
-                .builder()
-                .withPartPrefix("avgspeedfines")
-                .withPartSuffix(".csv")
-                .build();
-
-        env.enableCheckpointing(600000);
-        final StreamingFileSink<String> sinkAvg = StreamingFileSink
-            .forRowFormat(new Path(output), new SimpleStringEncoder<String>("UTF-8"))
-            .withOutputFileConfig(config)
-            .build();
-         */
-         //Average Speed Fines
+         // Average Speed Fines
         position
                 .filter(pe -> pe.getSeg() >= 52 && pe.getSeg() <= 56)
                 .assignTimestampsAndWatermarks(WatermarkStrategy.<PositionEvent>forMonotonousTimestamps()
-                        .withTimestampAssigner((event, timeStamp) -> event.getTime() * 1000))
-                // Make sure it has to be forMonotonousTimeStamps()
+                        .withTimestampAssigner((pe, timeStamp) -> pe.getTime() * 1000))
                 .keyBy(new KeySelector<PositionEvent, Tuple3<Integer, Integer, Integer>>() {
                     @Override
                     public Tuple3<Integer, Integer, Integer> getKey(PositionEvent pe) throws Exception {
@@ -73,41 +50,31 @@ public class VehicleTelematics {
                     }
                 })
                 .window(EventTimeSessionWindows.withGap(Time.seconds(100))) // Appropriate value for the gap? With 30 or lesss it does not return the same output
-                .apply(new AvgSpeedWindow())
+                .apply(new AvgSpeedControl())
                 .writeAsCsv(output + "/avgspeedfines.csv", FileSystem.WriteMode.OVERWRITE).setParallelism(1);
-                // .map(AvgSpeedFine::toString).addSink(sinkAvg); No deprecated way to do it (problems with checkpointing)
-        //Speed Fines
+        // Speed Fines
         position
                 .filter(pe -> pe.getSpd() > 90)
-                .map(new MapFunction<PositionEvent,SpeedFine>() {
-                  SpeedFine speedFine = new SpeedFine();
-                    @Override
-                    public SpeedFine map(PositionEvent pe) throws Exception {
-                        speedFine.setTime(pe.getTime());
-                        speedFine.setVid(pe.getVid());
-                        speedFine.setXway(pe.getXway());
-                        speedFine.setSeg(pe.getSeg());
-                        speedFine.setDir(pe.getDir());
-                        speedFine.setSpd(pe.getSpd());
-                        return speedFine;
-                    }
-                })
+                .map((MapFunction<PositionEvent, SpeedFine>) pe -> new SpeedFine(pe.getTime(), pe.getVid(),
+                        pe.getXway(), pe.getSeg(), pe.getDir(), pe.getSpd()))
                 .writeAsCsv(output + "/speedfines.csv", FileSystem.WriteMode.OVERWRITE).setParallelism(1);
-        //Accident Report
 
+        // Accident Report
         position
-                .filter(pe -> pe.getSpd() == 0).setParallelism(1)
+                .filter(pe -> pe.getSpd() == 0)
                 .keyBy(new KeySelector<PositionEvent, Tuple5<Integer, Integer, Integer,Integer,Integer>>() {
                     @Override
                     public Tuple5<Integer, Integer, Integer,Integer,Integer> getKey(PositionEvent pe) throws Exception {
-                        return new Tuple5<Integer, Integer, Integer,Integer,Integer>(pe.getVid(),pe.getXway(),pe.getSeg(), pe.getDir(), pe.getPos());
+                        return new Tuple5<Integer, Integer, Integer,Integer,Integer>(pe.getVid(), pe.getXway(),
+                                pe.getSeg(), pe.getDir(), pe.getPos());
                     }
                 })
                 .countWindow(4, 1)
-                .apply(new RepOfAccident())
+                .apply(new AccidentReporter())
                 .writeAsCsv(output + "/accidents.csv", FileSystem.WriteMode.OVERWRITE).setParallelism(1);
 
-        // execute program
+
+        // Execute program
         try {
             env.execute("Vehicle Telematics");
         } catch (Exception e) {

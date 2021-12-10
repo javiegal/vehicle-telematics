@@ -2,38 +2,19 @@ package master;
 
 import org.apache.flink.api.java.tuple.Tuple7;
 
-public class Accident extends Tuple7<Integer, Integer, Integer,
-        Integer, Integer, Integer, Integer> {
+public class Accident extends Tuple7<Integer, Integer, Integer, Integer, Integer, Integer, Integer> {
+    public Accident(){
 
-    public Accident() {
     }
 
-    public void setSTime(int time) {
-        f0 = time;
-    }
-
-    public void setFTime(int time) {
-        f1 = time;
-    }
-
-    public void setVid(int vid) {
-        f2 = vid;
-    }
-
-    public void setXway(int xway) {
-        f3 = xway;
-    }
-
-    public void setSeg(int seg) {
-        f4 = seg;
-    }
-
-    public void setDir(int dir) {
-        f5 = dir;
-    }
-
-    public void setPos(int pos) {
-        f6 = pos;
+    public Accident(int startTime, int endTime, int vid, int xway, int seg, int dir, int pos) {
+        this.f0 = startTime;
+        this.f1 = endTime;
+        this.f2 = vid;
+        this.f3 = xway;
+        this.f4 = seg;
+        this.f5 = dir;
+        this.f6 = pos;
     }
 
 }
