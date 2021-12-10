@@ -48,7 +48,7 @@ public class VehicleTelematics {
         );
 
         // Average Speed Fines
-        int windowGap = 1000; // Gap time for the window
+        int windowGap = 1000; // Maximum number of seconds to wait for a new report from the same vehicle in the same highway and direction
         position
                 .filter(pe -> pe.getSeg() >= VTConstants.INI_SEG && pe.getSeg() <= VTConstants.END_SEG)
                 .assignTimestampsAndWatermarks(WatermarkStrategy.<PositionEvent>forMonotonousTimestamps()
