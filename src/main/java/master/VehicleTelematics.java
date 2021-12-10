@@ -48,7 +48,7 @@ public class VehicleTelematics {
         );
 
         // Average Speed Fines
-        int windowGap = 10000; // Gap time for the window
+        int windowGap = 1000; // Gap time for the window
         position
                 .filter(pe -> pe.getSeg() >= VTConstants.INI_SEG && pe.getSeg() <= VTConstants.END_SEG)
                 .assignTimestampsAndWatermarks(WatermarkStrategy.<PositionEvent>forMonotonousTimestamps()
@@ -66,9 +66,13 @@ public class VehicleTelematics {
         // Speed Fines
         position
                 .filter(pe -> pe.getSpd() > VTConstants.MAX_SPEED)
-                .map((MapFunction<PositionEvent, Tuple6<Integer, Integer, Integer, Integer, Integer, Integer>>) pe ->
-                        new Tuple6<Integer, Integer, Integer, Integer, Integer, Integer>(pe.getTime(), pe.getVid(),
-                                pe.getXway(), pe.getSeg(), pe.getDir(), pe.getSpd()))
+                .map(new MapFunction<PositionEvent, Tuple6<Integer, Integer, Integer, Integer, Integer, Integer>> () {
+                        @Override
+                        public Tuple6<Integer, Integer, Integer, Integer, Integer, Integer> map (PositionEvent pe){
+                            return new Tuple6<Integer, Integer, Integer, Integer, Integer, Integer>(pe.getTime(),
+                                    pe.getVid(), pe.getXway(),pe.getSeg(),pe.getDir(),pe.getSpd());
+                        }
+                })
                 .writeAsCsv(outputFolder + "/speedfines.csv", FileSystem.WriteMode.OVERWRITE).setParallelism(1);
 
         // Accident Report
